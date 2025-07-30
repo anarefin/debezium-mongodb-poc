@@ -14,16 +14,17 @@ MongoDB (Replica Set) → Debezium Connector → Kafka → Consumer Application
 - **Apache Kafka**: Message broker for change event streaming
 - **Debezium**: MongoDB source connector for change data capture
 - **Kafka Connect**: Platform for running Debezium connectors
-- **Python Consumer**: Example application consuming change events
+- **Spring Boot Application**: Java application consuming change events and producing processed events
 - **Kafka UI**: Web interface for monitoring topics and messages
+- **Schema Registry**: Schema management for Kafka messages
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
 - Docker and Docker Compose
-- Python 3.8+ (for consumer application)
-- curl (for connector setup)
+- Java 21+ and Maven (for Spring Boot application)
+- curl (for connector setup and API testing)
 
 ### 1. Start the Infrastructure
 
@@ -60,23 +61,28 @@ This script will:
 - Create the MongoDB source connector
 - Verify the connector status
 
-### 4. Start the Consumer
+### 4. Start the Spring Boot Application
 
 ```bash
-# Install Python dependencies
-cd consumer
-pip install -r requirements.txt
-
-# Start consuming change events
-python kafka_consumer.py
+# Build and start the Spring Boot application
+cd spring-kafka-app
+mvn spring-boot:run
 ```
+
+The application will start on port 9090 and automatically begin consuming change events from Kafka topics.
 
 ### 5. Test with Sample Data
 
+You can test the system in multiple ways:
+
 ```bash
-# Insert test data (will trigger change events)
+# Option 1: Use the Spring Boot API endpoints
+curl -X POST http://localhost:9090/api/events/test
+curl http://localhost:9090/api/events/health
+
+# Option 2: Use the shell script to insert test data
 cd scripts
-python test-insert.py
+./add-test-data.sh
 ```
 
 ## 📁 Project Structure
@@ -89,12 +95,19 @@ poc/
 │   └── sample-data.js          # Sample collections and users
 ├── debezium/
 │   └── mongodb-connector.json  # Debezium connector configuration
-├── consumer/
-│   ├── requirements.txt        # Python dependencies
-│   └── kafka_consumer.py       # Sample Kafka consumer
+├── spring-kafka-app/           # Spring Boot application
+│   ├── pom.xml                # Maven configuration
+│   ├── src/main/java/com/poc/kafka/
+│   │   ├── KafkaMongodbCdcApplication.java  # Main application
+│   │   ├── consumer/           # Kafka consumer components
+│   │   ├── controller/         # REST API controllers
+│   │   ├── model/              # Data models
+│   │   └── service/            # Business logic services
+│   └── src/main/resources/
+│       └── application.yml     # Application configuration
 ├── scripts/
 │   ├── setup-connector.sh      # Connector setup script
-│   └── test-insert.py         # Test data generator
+│   └── add-test-data.sh       # Shell script for test data
 └── README.md                   # This file
 ```
 
@@ -105,6 +118,8 @@ poc/
 The POC monitors these collections in the `testdb` database:
 - `users` - User profile data
 - `orders` - Order transaction data
+
+The Spring Boot application connects to a `poc` database and provides REST APIs for data management.
 
 ### Debezium Connector Settings
 
@@ -124,6 +139,15 @@ Key configuration options in `debezium/mongodb-connector.json`:
 Change events are published to these topics:
 - `poc.users` - User collection changes
 - `poc.orders` - Order collection changes
+- `processed-changes` - Processed events from the Spring Boot application
+
+### Spring Boot Application Configuration
+
+Key configuration in `spring-kafka-app/src/main/resources/application.yml`:
+- Server runs on port 9090
+- Kafka consumer group: `mongodb-change-consumer`
+- MongoDB database: `poc`
+- Manual acknowledgment for reliable processing
 
 ## 🧪 Testing
 
@@ -143,28 +167,51 @@ db.users.insertOne({
 })
 ```
 
-2. **Watch the consumer output** to see the change event being processed.
+2. **Watch the Spring Boot application logs** to see the change event being processed.
+
+### API Testing
+
+The Spring Boot application provides REST endpoints:
+
+```bash
+# Health check
+curl http://localhost:9090/api/events/health
+
+# Create test data and trigger change events
+curl -X POST http://localhost:9090/api/events/test
+
+# Create a new user
+curl -X POST http://localhost:9090/api/data/users \
+  -H "Content-Type: application/json" \
+  -d '{"name": "John Doe", "email": "john@example.com", "department": "Engineering"}'
+
+# Create a new order
+curl -X POST http://localhost:9090/api/data/orders \
+  -H "Content-Type: application/json" \
+  -d '{"userId": "user123", "productName": "Laptop", "quantity": 1, "price": 999.99}'
+```
 
 ### Automated Testing
 
-Use the provided test script:
+Use the provided shell script for test data generation:
 
 ```bash
 cd scripts
-python test-insert.py
+./add-test-data.sh
 ```
 
-Options available:
-- Insert sample users
-- Insert sample orders  
-- Insert bulk data for performance testing
-- View collection statistics
+This script will insert test data into MongoDB to trigger change events.
 
 ## 📊 Monitoring
 
+### Application Endpoints
+
+- **Spring Boot Application**: http://localhost:9090/api/events/health
+- **API Documentation**: Available at http://localhost:9090/api/events/test (test endpoint)
+
 ### Kafka UI
 
-Access the Kafka UI at http://localhost:8080 to:
+Access the Kafka UI at http://localhost:8082 to:
 - View topics and partitions
 - Browse messages
 - Monitor consumer groups
@@ -231,10 +278,11 @@ Each change event contains:
    - Check topic exists: Visit Kafka UI at http://localhost:8080
    - Ensure data is being inserted into monitored collections
 
-3. **Consumer not receiving messages**
-   - Verify Kafka connection settings
-   - Check consumer group status in Kafka UI
+3. **Spring Boot application not receiving messages**
+   - Check application.yml Kafka configuration
+   - Verify consumer group status in Kafka UI
    - Ensure topics exist and have messages
+   - Check application logs for connection errors
 
 ### Useful Commands
 
@@ -245,10 +293,16 @@ docker-compose restart mongodb
 # View service logs
 docker-compose logs -f kafka-connect
 
+# View Spring Boot application logs
+cd spring-kafka-app && tail -f app.log
+
 # Reset Kafka Connect (deletes connector state)
 docker-compose down
 docker volume rm poc_mongodb_data
 docker-compose up -d
+
+# Rebuild and restart Spring Boot app
+cd spring-kafka-app && mvn clean spring-boot:run
 ```
 
 ## 🚀 Production Considerations
@@ -256,7 +310,8 @@ docker-compose up -d
 ### Scaling
 - Use MongoDB sharded clusters for horizontal scaling
 - Configure multiple Kafka Connect workers
-- Implement consumer groups for parallel processing
+- Scale Spring Boot application horizontally with load balancer
+- Implement Kafka partitioning for parallel processing
 
 ### Security
 - Enable MongoDB authentication and authorization
@@ -271,7 +326,8 @@ docker-compose up -d
 ### Performance
 - Tune MongoDB oplog size for retention
 - Configure Kafka producer batching
-- Optimize consumer batch processing
+- Optimize Spring Boot application with connection pooling
+- Implement async processing for high throughput
 
 ## 🤝 Next Steps
 
@@ -280,10 +336,14 @@ docker-compose up -d
 3. **Production deployment**: Use Kubernetes or container orchestration
 4. **Schema management**: Implement proper schema registry usage
 5. **Monitoring**: Add comprehensive metrics and alerting
+6. **Testing**: Implement unit and integration tests for Spring Boot application
+7. **Security**: Add authentication and authorization to REST APIs
 
 ## 📚 References
 
 - [Debezium MongoDB Connector Documentation](https://debezium.io/documentation/reference/stable/connectors/mongodb.html)
 - [MongoDB Change Streams](https://docs.mongodb.com/manual/changeStreams/)
 - [Kafka Connect Documentation](https://kafka.apache.org/documentation/#connect)
+- [Spring Boot Documentation](https://docs.spring.io/spring-boot/docs/current/reference/htmlsingle/)
+- [Spring Kafka Documentation](https://docs.spring.io/spring-kafka/docs/current/reference/html/)
 - [Docker Compose Reference](https://docs.docker.com/compose/)

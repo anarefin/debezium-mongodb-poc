@@ -51,8 +51,7 @@ cd spring-kafka-app && mvn spring-boot:run
 # Generate test data to trigger change events (shell version - no dependencies)
 cd scripts && ./add-test-data.sh
 
-# Alternative: Python version (requires pymongo: pip install pymongo)
-cd scripts && python test-insert.py
+# Note: The shell script method is the only available option for test data generation
 
 # Test the application endpoints
 curl http://localhost:9090/api/events/health

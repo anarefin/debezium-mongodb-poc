@@ -65,7 +65,7 @@ verify_connector() {
     
     status=$(curl -s "$KAFKA_CONNECT_URL/connectors/$CONNECTOR_NAME/status")
     echo "Connector Status:"
-    echo $status | python3 -m json.tool
+    echo $status | jq .
     
     # Check if connector is running
     if echo $status | grep -q '"state":"RUNNING"'; then
@@ -78,7 +78,7 @@ verify_connector() {
 # Function to list all connectors
 list_connectors() {
     echo "📋 Current connectors:"
-    curl -s "$KAFKA_CONNECT_URL/connectors" | python3 -m json.tool
+    curl -s "$KAFKA_CONNECT_URL/connectors" | jq .
 }
 
 # Main execution
@@ -95,8 +95,8 @@ main() {
     echo "🎉 Setup completed successfully!"
     echo ""
     echo "Next steps:"
-    echo "1. Check Kafka UI at http://localhost:8080 to view topics"
-    echo "2. Run the Python consumer: cd consumer && python kafka_consumer.py"
+    echo "1. Check Kafka UI at http://localhost:8082 to view topics"
+    echo "2. Start the Spring Boot application: cd spring-kafka-app && mvn spring-boot:run"
     echo "3. Insert test data: mongo --eval \"db.users.insertOne({name: 'Test User', email: 'test@example.com'})\" testdb"
 }
 
