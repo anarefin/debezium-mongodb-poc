@@ -1,0 +1,53 @@
+server:
+  port: 9090
+
+spring:
+  application:
+    name: mongodb-cdc-kafka-app
+  data:
+    mongodb:
+      host: localhost
+      port: 27017
+      database: poc
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: mongodb-change-consumer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        max.poll.records: 10
+        session.timeout.ms: 30000
+        heartbeat.interval.ms: 10000
+    listener:
+      ack-mode: manual
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        acks: all
+        retries: 3
+        batch.size: 16384
+        linger.ms: 5
+
+# Application specific configuration
+app:
+  kafka:
+    topics:
+      input: "poc.users,poc.orders"
+      output: "processed-changes"
+    consumer:
+      concurrency: 2
+  mongodb:
+    collections:
+      - users
+      - orders
+
+logging:
+  level:
+    com.poc.kafka: INFO
+    org.springframework.kafka: INFO
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
